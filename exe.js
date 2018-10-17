@@ -173,6 +173,23 @@ module.exports = () => {
       for (let key of Object.keys(cache))
         if (cache[key].query.name == name) delete cache[key]
     },
-    clearKey: (key) => delete cache[key]
+    clearKey: (key) => delete cache[key],
+    now: (queries) => {
+      // make everything atomic
+      for (let key of Object.keys(queries))
+        queries[key].options.atomic = true
+
+      return Promise.all(Object.keys(queries).map((key) => {
+        const query = queries[key]
+        return providers[query.name](query.params).then((value) => {
+          return { key: key, value: value }
+        })
+      }))
+      .then((array) => {
+        const results = {}
+        for (let entry of array) results[entry.key] = entry.value
+        return results
+      })
+    }
   }
 }

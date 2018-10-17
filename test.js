@@ -8,15 +8,18 @@ exe.use('user', (params) => new Promise((resolve, reject) => {
   setTimeout(() => resolve(Date.now()), 5000)
 }))
 
-exe.on('update', (queries) => {
-  console.log('update', queries)
+exe.on('update', (state) => {
+  console.log('update', state)
 })
-exe.on('error', (queries) => {
-  console.log('error', queries)
+exe.on('error', (errors) => {
+  console.log('error', errors)
 })
-exe.run(queries)
+// exe.run(queries)
 
+exe.now(queries).then((queries) => {
+  console.log(queries)
+})
 
-setTimeout(() => {
-  exe.run(queries)
-}, 1000)
+// setTimeout(() => {
+//   exe.run(queries)
+// }, 1000)
