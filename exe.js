@@ -23,7 +23,6 @@ module.exports = () => {
   }
 
   const querycomplete = (key, result) => {
-    console.log('complete', key)
     const query = plan.running[key]
     if (query.options.cache || typeof query.options.cache == 'undefined')
       cache[key] = { query: query, value: result }
@@ -34,14 +33,12 @@ module.exports = () => {
   }
 
   const queryerror = (key, error) => {
-    console.log('error', key)
     delete plan.running[key]
     delete plan.atomic[key]
     plan.errors[key] = error
   }
 
   const executequery = (key, query) => {
-    console.log('execute', key)
     let aborted = false
     plan.running[key] = query
     providers[query.name](query.params)
@@ -59,7 +56,6 @@ module.exports = () => {
   }
 
   const executemissing = (queries) => {
-    console.log('missing', Object.keys(queries))
     let aborted = false
     missingprovider(queries)
       .then((results) => {
@@ -91,7 +87,6 @@ module.exports = () => {
       state[key] = entry.value
     }
 
-    // console.log('evaluate', plan)
     const errorscount = Object.keys(plan.errors).length
     const readycount = Object.keys(plan.ready).length
     const runningcount = Object.keys(plan.running).length
