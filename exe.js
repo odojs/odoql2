@@ -2,10 +2,11 @@ const equal = require('fast-deep-equal')
 
 module.exports = () => {
   const providers = {}
-  const listeners = { update: [], unknown: [], error: [] }
+  const listeners = { update: [], error: [] }
   let missingprovider = null
 
   let state = {}
+  let cache = {}
 
   let plan = {
     tasks: [],
@@ -23,6 +24,9 @@ module.exports = () => {
 
   const querycomplete = (key, result) => {
     console.log('complete', key)
+    const query = plan.running[key]
+    if (query.options.cache || typeof query.options.cache == 'undefined')
+      cache[key] = { query: query, value: result }
     delete plan.running[key]
     delete plan.atomic[key]
     plan.complete[key] = result
@@ -38,7 +42,7 @@ module.exports = () => {
 
   const executequery = (key, query) => {
     console.log('execute', key)
-    const aborted = false
+    let aborted = false
     plan.running[key] = query
     providers[query.name](query.params)
       .then((result) => {
@@ -56,7 +60,7 @@ module.exports = () => {
 
   const executemissing = (queries) => {
     console.log('missing', Object.keys(queries))
-    const aborted = false
+    let aborted = false
     missingprovider(queries)
       .then((results) => {
         if (aborted) return
@@ -72,6 +76,21 @@ module.exports = () => {
   }
 
   const evaluate = () => {
+    // check cache
+    for (let key of Object.keys(plan.ready)) {
+      const query = plan.ready[key]
+      if (!cache[key]) continue
+      const entry = cache[key]
+      if (!equal(entry.query, query)) {
+        delete cache[key]
+        continue
+      }
+      delete plan.ready[key]
+      delete plan.atomic[key]
+      plan.complete[key] = entry.value
+      state[key] = entry.value
+    }
+
     // console.log('evaluate', plan)
     const errorscount = Object.keys(plan.errors).length
     const readycount = Object.keys(plan.ready).length
@@ -113,48 +132,47 @@ module.exports = () => {
     if (Object.keys(missing).length > 0) executemissing(missing)
   }
 
+  const run = (queries) => {
+    if (Object.keys(plan.ready).length != 0 ||
+      Object.keys(plan.running).length != 0)
+      for (let task of plan.tasks) task.abort()
+    plan = {
+      tasks: [],
+      atomic: {},
+      errors: {},
+
+      complete: {},
+      ready: {},
+      running: {}
+    }
+    for (let key of Object.keys(state)) if (!queries[key]) delete state[key]
+    for (let key of Object.keys(queries)) {
+      state[key] = null
+      const query = queries[key]
+      if (query.options.atomic || typeof query.options.atomic == 'undefined')
+        plan.atomic[key] = query
+      plan.ready[key] = query
+    }
+    evaluate()
+  }
+
   return {
     use: (name, fn) => {
       if (providers[name]) throw new Error(`${name} already in use by OdoQL`)
       providers[name] = fn
     },
-    on: (event, fn) => {
-      listeners[event].push(fn)
-    },
+    on: (event, fn) => listeners[event].push(fn),
     off: (event, fn) => {
       const index = listeners[event].indexOf(fn)
       if (index > -1) listeners[event].splice(index, 1)
     },
-    valiate: (queries) => {
-      const results = {}
-      for (let key of queries) results[key] = providers[queries[key].name]
-      return results
+    missing: (provider) => missingprovider = provider,
+    run: run,
+    clear: () => cache = {},
+    clearQuery: (name) => {
+      for (let key of Object.keys(cache))
+        if (cache[key].query.name == name) delete cache[key]
     },
-    missing: (provider) => {
-      missingprovider = provider
-    },
-    run: (queries) => {
-      if (Object.keys(plan.ready).length != 0 ||
-        Object.keys(plan.running).length != 0)
-        for (let task of plan.tasks) task.abort()
-      plan = {
-        tasks: [],
-        atomic: {},
-        errors: {},
-
-        complete: {},
-        ready: {},
-        running: {}
-      }
-      for (let key of Object.keys(state)) if (!queries[key]) delete state[key]
-      for (let key of Object.keys(queries)) {
-        state[key] = null
-        const query = queries[key]
-        if (query.options.atomic || typeof query.options.atomic == 'undefined')
-          plan.atomic[key] = query
-        plan.ready[key] = query
-      }
-      evaluate()
-    }
+    clearKey: (key) => delete cache[key]
   }
 }
