@@ -7,6 +7,6 @@ module.exports = {
   merge: require('./merge'),
   odojs: (component, spec) => {
     if (!spec.query) return component.query = () => {}
-    component.query = (params) => spec.query.call(component, params)
+    component.query = (...args) => spec.query.apply(component, args)
   }
 }
