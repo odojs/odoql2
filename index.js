@@ -1,5 +1,13 @@
 const equal = require('fast-deep-equal')
 
+const component = (spec) => {
+  spec = Object.assign({}, spec)
+  instance = (state, params, hub) => spec.render.call(spec, state, params, hub)
+  if (spec.query) instance.query = (...args) => spec.query.apply(component, args)
+  else instance.query = () => {}
+  return instance
+}
+
 module.exports = {
   query: (name, params, options) => {
     return { name: name, params: params, options: options || {} }
@@ -31,8 +39,5 @@ module.exports = {
     }
     return result
   }),
-  odojs: (component, spec) => {
-    if (!spec.query) return component.query = () => {}
-    component.query = (...args) => spec.query.apply(component, args)
-  }
+  component: component
 }
