@@ -170,21 +170,31 @@ module.exports = () => {
     },
     clearKey: (key) => delete cache[key],
     now: (queries) => {
-      // make everything atomic
-      for (let key of Object.keys(queries))
-        queries[key].options.atomic = true
+      const missing = {}
+      const ready = {}
 
-      return Promise.all(Object.keys(queries).map((key) => {
+      for (let key of Object.keys(queries)) {
         const query = queries[key]
-        return providers[query.name](query.params).then((value) => {
-          return { key: key, value: value }
-        })
-      }))
-      .then((array) => {
-        const results = {}
-        for (let entry of array) results[entry.key] = entry.value
-        return results
-      })
+        query.options.atomic = true
+        if (!providers[query.name]) missing[key] = query
+        else ready[key] = query
+      }
+
+      const results = {}
+
+      const missingkeys = Object.keys(missing)
+      return Promise.all([
+        ...Object.keys(ready).map((key) => {
+          const query = ready[key]
+          return providers[query.name](query.params).then((value) => {
+            results[key] = value
+          })
+        }),
+        (missingkeys.length > 0
+          ? missingprovider(queries).then((r) => Object.assign(results, r))
+          : Promise.resolve())
+      ])
+      .then(() => results)
     }
   }
 }
